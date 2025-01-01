@@ -1,4 +1,0 @@
-vapoursynth
-numpy
-pywavelets
-scipy
