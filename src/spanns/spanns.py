@@ -314,7 +314,7 @@ def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 
     ref1 = ref1 if ref1 is not None else core.std.Median(clip, planes)
     ref2 = ref2 if ref2 is not None else core.std.BoxBlur(clip, planes)
 
-    return core.std.ModifyFrame(clip=clip, clips=[src, ref1, ref2], selector=routine)
+    return core.std.ModifyFrame(clip=clip, clips=[clip, ref1, ref2], selector=routine)
 
 
 def submatof(mat,rad):
