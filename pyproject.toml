@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spann"
+version = "0.0.1"
+authors = [
+  {name="Gabriella Chaos"},
+]
+description = "The Survival Probability Adapted Nuclear Norm Shrinkage Denoiser"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "vapoursynth",
+  "numpy",
+  "pywavelets",
+  "scipy",
+]
+
+[project.urls]
+Homepage = "https://github.com/Gabriella-Chaos/spanns"
