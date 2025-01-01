@@ -31,9 +31,9 @@ TODO
 
 Background
 ----------
-In 2019, the author was disappointed by the practical performance of WNNM, a well-regarded but (f\*\*\*\*\*\*)cumbersome denoising approach proposed years earlier. Although there have been improvements to the technique, most rely on patch matching and increasing complexity, which the author finds unappealing. Reflecting on its limitations, the author implemented a better (but still sh\*t) heuristic method: SPANN.
+In 2019, the author was disappointed by the practical performance of WNNM, a well-regarded but (f\*\*\*\*\*\*)cumbersome denoising approach proposed years earlier. Although there have been improvements to the technique, most rely on patch matching and increasing complexity, which the author finds unappealing. Reflecting on its limitations, the author implemented a better (but still sh\*t) heuristic method: SPANNS.
 
-In essence, SPANN damps the orthogonal components according to the noise's survival probability along the axis of component magnitude (the singular values). While the denoising results might not stand out in today's advanced landscape, the author hopes someone can appreciate its simplicity.
+In essence, SPANNS damps the orthogonal components according to the noise's survival probability along the axis of component magnitude (the singular values). While the denoising results might not stand out in today's advanced landscape, the author hopes someone can appreciate its simplicity.
 
 Buy Me Coffee
 -------------
