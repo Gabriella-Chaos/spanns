@@ -256,7 +256,11 @@ def get_mask(A, gamma=0.5):
     B = ndimage.maximum_filter(B, size=3)
 
     thresh = np.quantile(B.ravel(), gamma)
-    B = np.clip((B - B.min()) / (thresh - B.min()), 0., 1.)
+
+    if thresh > B.min():
+        B = np.clip((B - B.min()) / (thresh - B.min()), 0., 1.)
+    else:
+        B = np.zeros_like(B)
     return B
 
 
@@ -294,7 +298,7 @@ def frame_spanns_routine(n, f, tol=0.7, gamma=0.5, steps=2, planes=[0, 1, 2]):
     return matrices_to_frame(src, f[0].copy())
 
 
-def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 0.5, passes: int = 2, ref1: vs.VideoNode = None, ref2: vs.VideoNode = None, planes: Sequence[int] = [0, 1, 2]):
+def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 0.5, passes: int = 2, ref1: vs.VideoNode = None, ref2: vs.VideoNode = None, planes: Sequence[int] = [0, 1, 2], core=vs.core):
     """
     The Survival Probability Adapted Nuclear Norm Shrinkage Denoiser
 
