@@ -271,16 +271,16 @@ def spanns_routine(orig, sigma=1, tol=0.7, gamma=0.5, steps=2, ref=None, dref=No
     ref = ref if ref is not None else ndimage.median_filter(orig, size=3)
     dref = dref if dref is not None else ndimage.gaussian_filter(orig, sigma=sigma)
 
+    T = orig
+
     for i in range(steps):
 
-        T = spanns_core(orig, dref, tol)
+        T = spanns_core(T, dref, tol)
+        T = (mask) * T + (1 - mask) * dref
 
-        lb = np.minimum(orig, ref)
-        ub = np.maximum(orig, ref)
-
-        orig = np.clip(T, lb, ub)
-
-    orig = (mask) * orig + (1 - mask) * dref
+    lb = np.minimum(orig, ref)
+    ub = np.maximum(orig, ref)
+    orig = np.clip(T, lb, ub)
 
     return orig
 
@@ -316,7 +316,7 @@ def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 
     routine = partial(frame_spanns_routine, tol=tol, gamma=gamma, steps=passes, planes=planes)
 
     ref1 = ref1 if ref1 is not None else core.std.Median(clip, planes)
-    ref2 = ref2 if ref2 is not None else core.std.BoxBlur(clip, planes)
+    ref2 = ref2 if ref2 is not None else core.std.BoxBlur(clip, planes, hradius=sigma, hpasses=3, vradius=sigma, vpasses=3)
 
     return core.std.ModifyFrame(clip=clip, clips=[clip, ref1, ref2], selector=routine)
 
