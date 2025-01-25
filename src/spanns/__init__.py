@@ -1,7 +1,7 @@
 from .spanns import spanns, spanns_core, spanns_routine
 
 import importlib
-__version__ = "1.0.3"
+__version__ = "1.1.1"
 
 __all__ = [
     "__version__",
