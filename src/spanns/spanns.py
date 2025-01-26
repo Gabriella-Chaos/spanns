@@ -209,16 +209,20 @@ marchenkopastur = mp_gen(name='marchenkopastur')
 
 def mp_fit(x):
 
-    tol = np.ptp(x) * 1e-6
-
     def f(ub):
-        xp = x[x < ub[0]]
+        xp = x[x < ub]
         theta = marchenkopastur.fit(xp, floc=0., fscale=1.)
         return marchenkopastur.nnlf(theta, xp)
 
-    ub = minimize(f, (np.quantile(x, 0.9),), method='SLSQP', bounds=((np.quantile(x, 0.3), np.max(x)),), tol=tol).x
-
-    xp = x[x < ub[0]]
+    blocks = int(np.round(np.sqrt(x.size)))
+    block_size = (np.quantile(x, 0.99) - np.quantile(x, 0.3)) / (blocks - 2)
+    guesses = np.linspace(np.quantile(x, 0.3), np.quantile(x, 0.99), blocks)
+    ubi = np.argmin([f(x) for x in guesses])
+    ub = guesses[ubi]
+    guesses = np.linspace(ub - block_size / 2, ub + block_size / 2, blocks)
+    ubi = np.argmin([f(x) for x in guesses])
+    ub = guesses[ubi]
+    xp = x[x < ub]
     theta = marchenkopastur.fit(xp)
     return theta
 
