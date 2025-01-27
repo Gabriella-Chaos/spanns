@@ -215,13 +215,14 @@ def mp_fit(x):
         return marchenkopastur.nnlf(theta, xp)
 
     blocks = int(np.round(np.sqrt(x.size)))
-    block_size = (np.quantile(x, 0.99) - np.quantile(x, 0.3)) / (blocks - 2)
-    guesses = np.linspace(np.quantile(x, 0.3), np.quantile(x, 0.99), blocks)
+    block_size = (np.quantile(x, 0.99) - np.quantile(x, 0.3)) / (blocks)
+    guesses = np.linspace(np.quantile(x, 0.3), np.quantile(x, 0.99), blocks + 2)[1: -1]
     ubi = np.argmin([f(x) for x in guesses])
     ub = guesses[ubi]
-    guesses = np.linspace(ub - block_size / 2, ub + block_size / 2, blocks)
-    ubi = np.argmin([f(x) for x in guesses])
-    ub = guesses[ubi]
+    # skip fine-grained search
+    # guesses = np.linspace(ub - block_size / 2, ub + block_size / 2, blocks)
+    # ubi = np.argmin([f(x) for x in guesses])
+    # ub = guesses[ubi]
     xp = x[x < ub]
     theta = marchenkopastur.fit(xp)
     return theta
