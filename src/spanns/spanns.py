@@ -214,6 +214,7 @@ def mp_fit(x):
         theta = marchenkopastur.fit(xp, floc=0., fscale=1.)
         return marchenkopastur.nnlf(theta, xp)
 
+    # This optimization step definitely complicate things, but for the sake of prototyping it's kept to simulate ub cutoffs
     blocks = int(np.round(np.sqrt(x.size)))
     block_size = (np.quantile(x, 0.99) - np.quantile(x, 0.3)) / (blocks)
     guesses = np.linspace(np.quantile(x, 0.3), np.quantile(x, 0.99), blocks + 2)[1: -1]
@@ -269,36 +270,40 @@ def get_mask(A, gamma=0.5):
     return B
 
 
-def spanns_routine(orig, sigma=1, tol=0.7, gamma=0.5, steps=2, ref=None, dref=None):
+def spanns_routine(orig, sigma=1, tol=0.7, gamma=0.5, steps=2, lref=None, dref=None):
 
     mask = get_mask(orig, gamma)
 
-    ref = ref if ref is not None else ndimage.median_filter(orig, size=3)
+    # ref = ref if ref is not None else ndimage.median_filter(orig, size=3)
     dref = dref if dref is not None else ndimage.gaussian_filter(orig, sigma=sigma)
 
     T = orig
 
     for i in range(steps):
-
         T = spanns_core(T, dref, tol)
         T = (mask) * T + (1 - mask) * dref
 
-    lb = np.minimum(orig, ref)
-    ub = np.maximum(orig, ref)
-    orig = np.clip(T, lb, ub)
+    if lref is not None:
+        lb = np.minimum(orig, ref)
+        ub = np.maximum(orig, ref)
+        orig = np.clip(T, lb, ub)
+    else:
+        orig = T
 
     return orig
 
 
-def frame_spanns_routine(n, f, tol=0.7, gamma=0.5, steps=2, planes=[0, 1, 2]):
+def frame_spanns_routine(n, f, tol=0.7, gamma=0.5, steps=2, planes=[0, 1, 2], limit=False):
 
     src = frame_to_matrices(f[0])
-    ref = frame_to_matrices(f[1])
-    dref = frame_to_matrices(f[2])
+    dref = frame_to_matrices(f[1])
+
+    if limit:
+        lref = frame_to_matrices(f[2])
 
     for i in planes:
-        s, r, d = src[i], ref[i], dref[i]
-        src[i, :] = spanns_routine(s, tol=tol, gamma=gamma, steps=steps, ref=r, dref=d)
+        s, l, d = src[i], (lref[i] if limit else None), dref[i]
+        src[i, :] = spanns_routine(s, tol=tol, gamma=gamma, steps=steps, lref=l, dref=d)
 
     return matrices_to_frame(src, f[0].copy())
 
@@ -313,17 +318,23 @@ def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 
         tol: noise tolerance, 0. to 1.
         gamma: texture threshold, 0. to 1., higher value preserves less texture.
         passes: number of denoising steps
-        ref1: reference clip, an approximation for result. default to median filter
-        ref2: reference blurred clip, `sigma` will be ignored if `ref2` is provided. default to boxblur with radius sigma
+        ref1: reference blurred clip, `sigma` will be ignored if `ref1` is provided. default to boxblur with radius sigma
+        ref2: reference clip, an approximation for result.
         planes: indices of planes to process
     """
 
-    routine = partial(frame_spanns_routine, tol=tol, gamma=gamma, steps=passes, planes=planes)
+    ref1 = ref1 if ref1 is not None else core.std.BoxBlur(clip, planes, hradius=sigma, hpasses=3, vradius=sigma, vpasses=3)
 
-    ref1 = ref1 if ref1 is not None else core.std.Median(clip, planes)
-    ref2 = ref2 if ref2 is not None else core.std.BoxBlur(clip, planes, hradius=sigma, hpasses=3, vradius=sigma, vpasses=3)
+    if ref2 is not None:
+        clips = [clip, ref1, ref2]
+        lref = True
+    else:
+        clips = [clip, ref1]
+        lref = False
 
-    return core.std.ModifyFrame(clip=clip, clips=[clip, ref1, ref2], selector=routine)
+    routine = partial(frame_spanns_routine, tol=tol, gamma=gamma, steps=passes, planes=planes, limit=lref)
+
+    return core.std.ModifyFrame(clip=clip, clips=clips, selector=routine)
 
 
 def submatof(mat,rad):
