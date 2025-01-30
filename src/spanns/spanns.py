@@ -207,35 +207,31 @@ class mp_gen(rv_continuous):
 marchenkopastur = mp_gen(name='marchenkopastur')
 
 
-def mp_fit(x):
+def mp_fit(x, cutoff):
+
+    if cutoff < 1.:
+        ub = np.quantile(x, cutoff)
+    else:
+        idx = int(np.round(cutoff))
+        ub = x[idx]
 
     def f(ub):
         xp = x[x < ub]
         theta = marchenkopastur.fit(xp, floc=0., fscale=1.)
         return marchenkopastur.nnlf(theta, xp)
 
-    # This optimization step definitely complicate things, but for the sake of prototyping it's kept to simulate ub cutoffs
-    blocks = int(np.round(np.sqrt(x.size)))
-    block_size = (np.quantile(x, 0.99) - np.quantile(x, 0.3)) / (blocks)
-    guesses = np.linspace(np.quantile(x, 0.3), np.quantile(x, 0.99), blocks + 2)[1: -1]
-    ubi = np.argmin([f(x) for x in guesses])
-    ub = guesses[ubi]
-    # skip fine-grained search
-    # guesses = np.linspace(ub - block_size / 2, ub + block_size / 2, blocks)
-    # ubi = np.argmin([f(x) for x in guesses])
-    # ub = guesses[ubi]
     xp = x[x < ub]
-    theta = marchenkopastur.fit(xp)
+    theta = marchenkopastur.fit(xp, floc=0., fscale=1.)
     return theta
 
 
-def spanns_core(orig, ref, tolerance=0.7):
+def spanns_core(orig, ref, tolerance=0., cutoff=0.9):
 
     U, sig, Vt = np.linalg.svd(orig, full_matrices=False)
     Un, sig_n, Vnt = np.linalg.svd(ref - orig, full_matrices=False)
 
     try:
-        params = mp_fit(sig_n)
+        params = mp_fit(sig_n, cutoff)
     except Exception as e:
         logger.debug(str(e))
         return orig
@@ -248,91 +244,46 @@ def spanns_core(orig, ref, tolerance=0.7):
     return T
 
 
-def get_mask(A, gamma=0.5):
+def spanns_routine(orig, ref, tol=0., cutoff=0.9):
 
-    w1 = 'bior1.1'
-    _, D = pywt.dwt2(A, w1)
-    B1 = np.abs(pywt.idwt2((None, D), w1))
+    T = spanns_core(orig, ref, tol, cutoff)
 
-    w2 = 'coif1'
-    _, D = pywt.dwt2(A, w2)
-    B2 = np.abs(pywt.idwt2((None, D), w2))
+    lb = np.minimum(orig, T)
+    ub = np.maximum(orig, T)
+    T = np.clip(ref, lb, ub)
 
-    B = np.maximum(B1, B2)
-    B = ndimage.maximum_filter(B, size=3)
-
-    thresh = np.quantile(B.ravel(), gamma)
-
-    if thresh > B.min():
-        B = np.clip((B - B.min()) / (thresh - B.min()), 0., 1.)
-    else:
-        B = np.zeros_like(B)
-    return B
+    return T
 
 
-def spanns_routine(orig, sigma=1, tol=0.7, gamma=0.5, steps=2, lref=None, dref=None):
-
-    mask = get_mask(orig, gamma)
-
-    # ref = ref if ref is not None else ndimage.median_filter(orig, size=3)
-    dref = dref if dref is not None else ndimage.gaussian_filter(orig, sigma=sigma)
-
-    T = orig
-
-    for i in range(steps):
-        T = spanns_core(T, dref, tol)
-        T = (mask) * T + (1 - mask) * dref
-
-    if lref is not None:
-        lb = np.minimum(orig, ref)
-        ub = np.maximum(orig, ref)
-        orig = np.clip(T, lb, ub)
-    else:
-        orig = T
-
-    return orig
-
-
-def frame_spanns_routine(n, f, tol=0.7, gamma=0.5, steps=2, planes=[0, 1, 2], limit=False):
+def frame_spanns_routine(n, f, tol=0., cutoff=0.9, planes=[0, 1, 2]):
 
     src = frame_to_matrices(f[0])
-    dref = frame_to_matrices(f[1])
-
-    if limit:
-        lref = frame_to_matrices(f[2])
+    ref = frame_to_matrices(f[1])
 
     for i in planes:
-        s, l, d = src[i], (lref[i] if limit else None), dref[i]
-        src[i, :] = spanns_routine(s, tol=tol, gamma=gamma, steps=steps, lref=l, dref=d)
+        s, r = src[i], (ref[i] if hasref else None)
+        src[i, :] = spanns_routine(s, r, tol=tol, cutoff=cutoff)
 
     return matrices_to_frame(src, f[0].copy())
 
 
-def spanns(clip: vs.VideoNode, sigma: int = 1, tol: float = 0.7, gamma: float = 0.5, passes: int = 2, ref1: vs.VideoNode = None, ref2: vs.VideoNode = None, planes: Sequence[int] = [0, 1, 2], core=vs.core):
+def spanns(clip: vs.VideoNode, sigma: int = 5, tol: float = 0., cutoff: float = 0.9, ref: vs.VideoNode = None, planes: Sequence[int] = [0, 1, 2], core=vs.core):
     """
     The Survival Probability Adapted Nuclear Norm Shrinkage Denoiser
 
     Args:
         clip: original video node
-        sigma: radius of boxblur (instead of gaussian filter)
+        sigma: radius of boxblur approximation to gaussian filter
         tol: noise tolerance, 0. to 1.
-        gamma: texture threshold, 0. to 1., higher value preserves less texture.
-        passes: number of denoising steps
-        ref1: reference blurred clip, `sigma` will be ignored if `ref1` is provided. default to boxblur with radius sigma
-        ref2: reference clip, an approximation for result.
+        ref: reference blurred clip, `sigma` will be ignored if `ref` is provided. default to boxblur with radius sigma.
         planes: indices of planes to process
     """
 
-    ref1 = ref1 if ref1 is not None else core.std.BoxBlur(clip, planes, hradius=sigma, hpasses=3, vradius=sigma, vpasses=3)
+    ref = ref if ref is not None else core.std.BoxBlur(clip, planes, hradius=sigma, hpasses=3, vradius=sigma, vpasses=3)
 
-    if ref2 is not None:
-        clips = [clip, ref1, ref2]
-        lref = True
-    else:
-        clips = [clip, ref1]
-        lref = False
+    clips = [clip, ref]
 
-    routine = partial(frame_spanns_routine, tol=tol, gamma=gamma, steps=passes, planes=planes, limit=lref)
+    routine = partial(frame_spanns_routine, tol=tol, cutoff=cutoff, planes=planes, hasref=hasref)
 
     return core.std.ModifyFrame(clip=clip, clips=clips, selector=routine)
 
